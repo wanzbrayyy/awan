@@ -5,6 +5,8 @@ import React, { Suspense } from 'react';
     import '@/i18n';
     import { Toaster } from '@/components/ui/toaster';
     
+    console.log("main.jsx is running");
+
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
         navigator.serviceWorker.register('/sw.js').then(registration => {

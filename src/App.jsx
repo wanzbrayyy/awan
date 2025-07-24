@@ -33,6 +33,7 @@ import React, { useEffect } from 'react';
     };
     
     function App() {
+      console.log("App.jsx is rendering");
       return (
         <AuthProvider>
           <Router>

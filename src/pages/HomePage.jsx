@@ -9,6 +9,7 @@ import React from 'react';
     
     const HomePage = () => {
       const { t } = useTranslation();
+      console.log("HomePage.jsx is rendering");
     
       const featureVariants = {
         hidden: { opacity: 0, y: 20 },
