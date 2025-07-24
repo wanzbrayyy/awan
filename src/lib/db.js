@@ -1,6 +1,5 @@
 import mongoose from 'mongoose';
-
-const MONGODB_URI = 'mongodb+srv://zanssxploit:pISqUYgJJDfnLW9b@cluster0.fgram.mongodb.net/chab?retryWrites=true&w=majority';
+import { MONGODB_URI } from '@/config';
 
 if (!MONGODB_URI) {
   throw new Error('Please define the MONGODB_URI environment variable inside .env.local');
