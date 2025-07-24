@@ -1,97 +1,105 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-    
-    const AuthContext = createContext();
-    
-    export function useAuth() {
-      return useContext(AuthContext);
+import { useNavigate } from 'react-router-dom';
+
+const AuthContext = createContext();
+
+export function useAuth() {
+  return useContext(AuthContext);
+}
+
+export const AuthProvider = ({ children }) => {
+  const [currentUser, setCurrentUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      // You might want to verify the token with the server here
+      // For simplicity, we'll just refetch user data
+      const user = JSON.parse(localStorage.getItem('currentUser'));
+      setCurrentUser(user);
     }
+    setLoading(false);
+  }, []);
+
+  const login = async (username, password) => {
+    const res = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ username, password }),
+    });
+
+    if (res.ok) {
+      const { token, user } = await res.json();
+      localStorage.setItem('token', token);
+      localStorage.setItem('currentUser', JSON.stringify(user));
+      setCurrentUser(user);
+      return user;
+    }
+    return null;
+  };
+
+  const register = async (username, password) => {
+    const res = await fetch('/api/auth/register', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ username, password }),
+    });
+
+    if (res.ok) {
+      const { user } = await res.json();
+      return user;
+    }
+    return null;
+  };
+
+  const logout = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('currentUser');
+    setCurrentUser(null);
+    navigate('/login');
+  };
+
+  const updateUser = async (updatedData) => {
+    if (!currentUser) return;
     
-    const getInitialState = () => {
-      try {
-        const user = localStorage.getItem('currentUser');
-        return user ? JSON.parse(user) : null;
-      } catch (error) {
-        return null;
-      }
-    };
-    
-    export const AuthProvider = ({ children }) => {
-      const [currentUser, setCurrentUser] = useState(null);
-      const [loading, setLoading] = useState(true);
-    
-      useEffect(() => {
-        const user = getInitialState();
-        setCurrentUser(user);
-        setLoading(false);
-      }, []);
-    
-      useEffect(() => {
-        try {
-          if (currentUser) {
-            localStorage.setItem('currentUser', JSON.stringify(currentUser));
-          } else {
-            localStorage.removeItem('currentUser');
-          }
-        } catch (error) {
-          console.error("Failed to update localStorage", error);
-        }
-      }, [currentUser]);
-    
-      const login = (username, password) => {
-        const users = JSON.parse(localStorage.getItem('users') || '[]');
-        const user = users.find(u => u.username === username && u.password === password);
-        if (user) {
-          setCurrentUser(user);
-          return user;
-        }
-        return null;
-      };
-    
-      const register = (username, password) => {
-        const users = JSON.parse(localStorage.getItem('users') || '[]');
-        if (users.find(u => u.username === username)) {
-          return null; 
-        }
-        const newUser = {
-          id: Date.now(),
-          username,
-          password,
-          requestTitle: `Send me anonymous messages!`,
-          profilePicture: `https://api.dicebear.com/7.x/bottts/svg?seed=${username}`,
-          plan: 'free',
-          hitCount: 0,
-        };
-        users.push(newUser);
-        localStorage.setItem('users', JSON.stringify(users));
-        return newUser;
-      };
-    
-      const logout = () => {
-        setCurrentUser(null);
-      };
-    
-      const updateUser = (updatedData) => {
-        if (!currentUser) return;
-    
-        const updatedUser = { ...currentUser, ...updatedData };
-        setCurrentUser(updatedUser);
-    
-        const users = JSON.parse(localStorage.getItem('users') || '[]');
-        const userIndex = users.findIndex(u => u.id === currentUser.id);
-        if (userIndex !== -1) {
-          users[userIndex] = updatedUser;
-          localStorage.setItem('users', JSON.stringify(users));
-        }
-      };
-    
-      const value = {
-        currentUser,
-        loading,
-        login,
-        register,
-        logout,
-        updateUser,
-      };
-    
-      return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
-    };
+    // This should be an API call to update the user in the database
+    // For now, we'll just update the local state
+    const updatedUser = { ...currentUser, ...updatedData };
+    setCurrentUser(updatedUser);
+    localStorage.setItem('currentUser', JSON.stringify(updatedUser));
+
+    // Example API call (you'll need to create this endpoint)
+    /*
+    const res = await fetch(`/api/users/${currentUser._id}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${localStorage.getItem('token')}`
+      },
+      body: JSON.stringify(updatedData),
+    });
+    if(res.ok) {
+      const user = await res.json();
+      setCurrentUser(user);
+      localStorage.setItem('currentUser', JSON.stringify(user));
+    }
+    */
+  };
+
+  const value = {
+    currentUser,
+    loading,
+    login,
+    register,
+    logout,
+    updateUser,
+  };
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+};

@@ -44,52 +44,77 @@ const ChatPage = () => {
 
 
   useEffect(() => {
-    const allUsers = JSON.parse(localStorage.getItem('users') || '[]');
-    const foundUser = allUsers.find(u => u.username === chatUsername);
-    setOtherUser(foundUser);
+    const fetchMessages = async () => {
+      // This is a bit tricky since we don't have a dedicated endpoint for a specific chat
+      // We'll filter from the general messages endpoint
+      try {
+        const res = await fetch('/api/messages', {
+          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
+        if (res.ok) {
+          const { data } = await res.json();
+          const chatMessages = data.filter(msg =>
+            (msg.sender && msg.sender.username === chatUsername) || (msg.recipient && msg.recipient.username === chatUsername)
+          );
+          setMessages(chatMessages.reverse()); // reverse to show oldest first
+        }
+      } catch (error) {
+        console.error("Failed to fetch messages", error);
+      }
+    };
 
-    const allMessages = JSON.parse(localStorage.getItem('messages') || '[]');
-    const chatMessages = allMessages.filter(
-      msg =>
-        (msg.senderUsername === currentUser.username && msg.recipient === chatUsername) ||
-        (msg.senderUsername === chatUsername && msg.recipient === currentUser.username)
-    );
-    setMessages(chatMessages);
-  }, [chatUsername, currentUser.username]);
+    const fetchUser = async () => {
+        try {
+            const res = await fetch(`/api/users/${chatUsername}`);
+            if(res.ok){
+                const {data} = await res.json();
+                setOtherUser(data);
+            }
+        } catch (error) {
+            console.error("Failed to fetch user", error)
+        }
+    }
+
+    if (currentUser) {
+      fetchMessages();
+      fetchUser();
+    }
+  }, [chatUsername, currentUser]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  const handleSendMessage = () => {
+  const handleSendMessage = async () => {
     if (!newMessage.trim()) return;
 
     const messageData = {
-      id: Date.now(),
-      type: 'dm',
-      recipient: chatUsername,
+      recipientUsername: chatUsername,
       text: newMessage,
-      timestamp: new Date().toISOString(),
-      senderUsername: currentUser.username,
-      senderProfilePicture: currentUser.profilePicture,
     };
 
-    if (navigator.onLine) {
-      const allMessages = JSON.parse(localStorage.getItem('messages') || '[]');
-      allMessages.push(messageData);
-      localStorage.setItem('messages', JSON.stringify(allMessages));
-      setMessages([...messages, messageData]);
-    } else {
-      const outbox = JSON.parse(localStorage.getItem('outbox') || '[]');
-      outbox.push(messageData);
-      localStorage.setItem('outbox', JSON.stringify(outbox));
-      if ('serviceWorker' in navigator && 'SyncManager' in window) {
-        navigator.serviceWorker.ready.then(sw => {
-          sw.sync.register('sync-messages');
-        });
+    try {
+      // The API will determine the sender from the token
+      const res = await fetch('/api/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify(messageData),
+      });
+
+      if (res.ok) {
+        const {data: newMessageData} = await res.json();
+        // The sender info should come back from the API
+        setMessages([...messages, newMessageData]);
+        setNewMessage('');
+      } else {
+        console.error("Failed to send message");
       }
+    } catch (error) {
+      console.error("Error sending message", error);
     }
-    setNewMessage('');
   };
 
   if (!otherUser) {

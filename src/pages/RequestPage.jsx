@@ -26,10 +26,22 @@ import Swal from 'sweetalert2';
       const [isSending, setIsSending] = useState(false);
     
       useEffect(() => {
-        const users = JSON.parse(localStorage.getItem('users') || '[]');
-        const foundUser = users.find(u => u.username.toLowerCase() === username.toLowerCase());
-        setUser(foundUser);
-        setIsLoading(false);
+        const fetchUser = async () => {
+          try {
+            const res = await fetch(`/api/users/${username}`);
+            if (res.ok) {
+              const { data } = await res.json();
+              setUser(data);
+            } else {
+              setUser(null);
+            }
+          } catch (error) {
+            setUser(null);
+          } finally {
+            setIsLoading(false);
+          }
+        };
+        fetchUser();
       }, [username]);
     
       const handleImageChange = (e) => {
@@ -48,107 +60,48 @@ import Swal from 'sweetalert2';
           return;
         }
 
-        const now = new Date().getTime();
-        const requestHistory = JSON.parse(localStorage.getItem('requestHistory') || '{}');
-        const userRequestHistory = requestHistory[user.username] || [];
-
-        const recentRequests = userRequestHistory.filter(timestamp => now - timestamp < 3600000); // 1 hour
-
-        if (recentRequests.length >= 20) {
-            toast({
-                variant: "destructive",
-                title: "Rate Limit Exceeded",
-                description: "You have sent too many messages. Please try again later.",
-            });
-            return;
-        }
-
-        let hitInfo = {
-            ip: 'N/A',
-            country: 'N/A',
-            city: 'N/A',
-            region: 'N/A',
-            org: 'N/A',
-            device: navigator.userAgent,
-        };
-
-        const getGeolocation = () => new Promise((resolve, reject) => {
-            if (navigator.geolocation) {
-                navigator.geolocation.getCurrentPosition(
-                    position => resolve(position),
-                    error => reject(error)
-                );
-            } else {
-                reject(new Error("Geolocation is not supported by this browser."));
-            }
-        });
-
-        try {
-            const position = await getGeolocation();
-            hitInfo.latitude = position.coords.latitude;
-            hitInfo.longitude = position.coords.longitude;
-
-            const reverseGeocodeUrl = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${hitInfo.latitude}&lon=${hitInfo.longitude}`;
-            const geoResponse = await fetch(reverseGeocodeUrl);
-            const geoData = await geoResponse.json();
-
-            hitInfo.address = geoData.display_name;
-            hitInfo.country = geoData.address.country;
-            hitInfo.city = geoData.address.city || geoData.address.town || geoData.address.village;
-            hitInfo.region = geoData.address.state;
-
-        } catch (geoError) {
-            console.warn("Could not get real-time location, falling back to IP-based location.", geoError.message);
-            try {
-                const response = await fetch('https://ipapi.co/json/');
-                const data = await response.json();
-                hitInfo.ip = data.ip;
-                hitInfo.org = data.org;
-                hitInfo.latitude = data.latitude;
-                hitInfo.longitude = data.longitude;
-                hitInfo.country = data.country_name;
-                hitInfo.city = data.city;
-                hitInfo.region = data.region;
-            } catch (ipError) {
-                console.error("Error fetching IP-based location details:", ipError);
-            }
-        }
-    
-        const allMessages = JSON.parse(localStorage.getItem('messages') || '[]');
-        const newMessage = {
-          id: Date.now(),
-          type: 'request',
-          recipient: user.username,
-          text: message,
-          link: link,
-          image: imagePreview,
-          timestamp: new Date().toISOString(),
-          senderUsername: `Anonymous-${Date.now()}`,
-          senderProfilePicture: `https://api.dicebear.com/7.x/pixel-art/svg?seed=${Date.now()}`,
-          hitInfo: hitInfo
-        };
-    
-        allMessages.push(newMessage);
-        localStorage.setItem('messages', JSON.stringify(allMessages));
-
-        recentRequests.push(now);
-        requestHistory[user.username] = recentRequests;
-        localStorage.setItem('requestHistory', JSON.stringify(requestHistory));
-    
-        sendLocalNotification(`New message for @${user.username}`, message.substring(0, 50) + '...');
-    
-        Swal.fire({
-          title: 'Pesan berhasil terkirim!',
-          text: 'Pesan Anda telah berhasil dikirim ke ' + user.username,
-          icon: 'success',
-          confirmButtonText: 'OK'
-        });
-        setMessage('');
-        setLink('');
-        setImage(null);
-        setImagePreview('');
         setIsSending(true);
-        setTimeout(() => setIsSending(false), 5000);
+        try {
+          const body = {
+            recipientUsername: user.username,
+            text: message,
+            link,
+            image: imagePreview, // In a real app, you'd upload the image and send the URL
+          };
+          const res = await fetch('/api/messages', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+          });
+
+          if (res.ok) {
+            Swal.fire({
+              title: 'Pesan berhasil terkirim!',
+              text: 'Pesan Anda telah berhasil dikirim ke ' + user.username,
+              icon: 'success',
+              confirmButtonText: 'OK'
+            });
+            setMessage('');
+            setLink('');
+            setImage(null);
+            setImagePreview('');
+          } else {
+            const errorData = await res.json();
+            toast({
+              variant: 'destructive',
+              title: 'Error',
+              description: errorData.message || 'Failed to send message.',
+            });
+          }
+        } catch (error) {
+          toast({
+            variant: 'destructive',
+            title: 'Error',
+            description: 'An unexpected error occurred.',
+          });
+        } finally {
+          setIsSending(false);
+        }
       };
     
       if (isLoading) {

@@ -26,36 +26,43 @@ const DmPage = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    const users = JSON.parse(localStorage.getItem('users') || '[]');
-    setAllUsers(users.filter(u => u.username !== currentUser.username));
+    const fetchConversations = async () => {
+      try {
+        const res = await fetch('/api/messages', {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          }
+        });
+        if (res.ok) {
+          const { data } = await res.json();
+          // This is a simplified grouping. A more robust solution might be needed.
+          const grouped = data.reduce((acc, msg) => {
+            const otherUser = msg.sender ? msg.sender.username : 'Anonymous';
+            if (!acc[otherUser]) {
+              acc[otherUser] = {
+                user: msg.sender || { username: 'Anonymous', profilePicture: `https://api.dicebear.com/7.x/pixel-art/svg?seed=${otherUser}` },
+                messages: []
+              };
+            }
+            acc[otherUser].messages.push(msg);
+            return acc;
+          }, {});
 
-    const allMessages = JSON.parse(localStorage.getItem('messages') || '[]');
-    
-    const userMessages = allMessages.filter(
-        msg => (msg.recipient === currentUser.username || msg.senderUsername === currentUser.username) && msg.type === 'dm'
-    );
-
-    const groupedMessages = userMessages.reduce((acc, msg) => {
-      const otherUserUsername = msg.recipient === currentUser.username ? msg.senderUsername : msg.recipient;
-      const otherUser = users.find(u => u.username === otherUserUsername) || { username: otherUserUsername, profilePicture: msg.senderProfilePicture };
-
-      if (!acc[otherUserUsername]) {
-        acc[otherUserUsername] = {
-            user: otherUser,
-            messages: []
-        };
+          const convos = Object.values(grouped).map(convo => ({
+            ...convo,
+            lastMessage: convo.messages[0], // Assumes messages are sorted by date
+          }));
+          setConversations(convos);
+        }
+      } catch (error) {
+        console.error("Failed to fetch conversations", error);
       }
-      acc[otherUserUsername].messages.push(msg);
-      return acc;
-    }, {});
+    };
 
-    const convos = Object.values(groupedMessages).map(convo => ({
-      ...convo,
-      lastMessage: convo.messages[convo.messages.length - 1],
-    })).sort((a, b) => new Date(b.lastMessage.timestamp) - new Date(a.lastMessage.timestamp));
-
-    setConversations(convos);
-  }, [currentUser.username]);
+    if (currentUser) {
+      fetchConversations();
+    }
+  }, [currentUser]);
 
   const handleStartNewChat = (user) => {
     navigate(`/dm/${user.username}`);
